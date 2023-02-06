@@ -86,9 +86,8 @@ function getHeaders(body?: string, init?: HeadersInit) {
 }
 
 function getBody(method: Method, payload: any) {
-  const body = sendBody(method) && payload != null 
-    ? JSON.stringify(payload) 
-    : undefined
+  const body =
+    sendBody(method) && payload != null ? JSON.stringify(payload) : undefined
 
   // if delete don't send body if empty
   return method === 'delete' && body === '{}' ? undefined : body
@@ -115,7 +114,7 @@ function getFetchParams(request: Request) {
   // if body is a top level array [ 'a', 'b', param: value ] with param values
   // using spread [ ...payload ] returns [ 'a', 'b' ] and skips custom keys
   // cloning with Object.assign() preserves all keys
-  
+
   // const payload = Object.assign(
   //   Array.isArray(request.payload) ? [] : {},
   //   request.payload,
@@ -237,41 +236,42 @@ function fetcher<Paths>() {
   const fetch = wrapMiddlewares(middlewares, fetchJson)
 
   const configure = (config: FetchConfig) => {
-      baseUrl = config.baseUrl || ''
-      defaultInit = config.init || {}
-      middlewares.splice(0)
-      middlewares.push(...(config.use || []))
-    }
+    baseUrl = config.baseUrl || ''
+    defaultInit = config.init || {}
+    middlewares.splice(0)
+    middlewares.push(...(config.use || []))
+  }
 
   const use = (mw: Middleware) => middlewares.push(mw)
   const path = <P extends keyof Paths>(path: P) => {
     const params: RequestParams = {}
 
     const builder = <M extends keyof Paths[P]>(method: M) => ({
-    query: (queryParams?: QueryParam<Paths[P][M]>) => {
-      params.query = queryParams as Record<string, string>
-      return builder(method)
-    },
-    body: (bodyParams?: BodyParam<Paths[P][M]>) => {
-      params.body = bodyParams
-      return builder(method)
-    },
-    path: (pathParams?: PathParam<Paths[P][M]>) => {
-      params.path = pathParams as Record<string, string>
-      return builder(method)
-    },
-    create: (() => createFetch((init) =>
-        fetchUrl({
-          baseUrl: baseUrl || '',
-          path: path as string,
-          method: method as Method,
-          // queryParams: Object.keys(queryParams || {}),
-          // payload,
-          params,
-          init: mergeRequestInit(defaultInit, init),
-          fetch,
-        })
-      )) as CreateFetch<M, Paths[P][M]>
+      query: (queryParams?: QueryParam<Paths[P][M]>) => {
+        params.query = queryParams as Record<string, string>
+        return builder(method)
+      },
+      body: (bodyParams?: BodyParam<Paths[P][M]>) => {
+        params.body = bodyParams
+        return builder(method)
+      },
+      path: (pathParams?: PathParam<Paths[P][M]>) => {
+        params.path = pathParams as Record<string, string>
+        return builder(method)
+      },
+      create: (() =>
+        createFetch((init) =>
+          fetchUrl({
+            baseUrl: baseUrl || '',
+            path: path as string,
+            method: method as Method,
+            // queryParams: Object.keys(queryParams || {}),
+            // payload,
+            params,
+            init: mergeRequestInit(defaultInit, init),
+            fetch,
+          }),
+        )) as CreateFetch<M, Paths[P][M]>,
     })
     return { method: builder }
   }
@@ -287,21 +287,24 @@ type QueryParam<Path> = PickParameters<'query', Path>
 type BodyParam<Path> = UnionToIntersection<Values<PickParameters<'body', Path>>>
 type PathParam<Path> = PickParameters<'path', Path>
 
-type PickParameters<Param, Path> = Param extends 'body' | 'query' | 'path' ?
-  Path extends {
-    parameters: {
-      query?: infer Q,
-      path?: infer P,
-      body?: infer B,
+type PickParameters<Param, Path> = Param extends 'body' | 'query' | 'path'
+  ? Path extends {
+      parameters: {
+        query?: infer Q
+        path?: infer P
+        body?: infer B
+      }
     }
-  } ? Path['parameters'][Param] : unknown : unknown
+    ? Path['parameters'][Param]
+    : unknown
+  : unknown
 
 export const Fetcher = {
   for: <Paths extends OpenapiPaths<Paths>>() => fetcher<Paths>(),
 }
 
 type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
-  k: infer I
+  k: infer I,
 ) => void
   ? I
   : never
