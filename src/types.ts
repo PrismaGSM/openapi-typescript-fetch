@@ -89,7 +89,6 @@ export type Fetch = (
 ) => Promise<ApiResponse>
 
 export type _TypedFetch<OP> = (
-  arg: OpArgType<OP>,
   init?: RequestInit,
 ) => Promise<ApiResponse<OpReturnType<OP>>>
 
@@ -111,15 +110,9 @@ export type FetchErrorType<F> = F extends TypedFetch<infer OP>
   ? OpErrorType<OP>
   : never
 
-type _CreateFetch<OP, Q = never> = [Q] extends [never]
-  ? () => TypedFetch<OP>
-  : (query: Q) => TypedFetch<OP>
+type _CreateFetch<OP> = () => TypedFetch<OP>
 
-export type CreateFetch<M, OP> = M extends 'post' | 'put' | 'patch' | 'delete'
-  ? OP extends { parameters: { query: infer Q } }
-    ? _CreateFetch<OP, { [K in keyof Q]: true | 1 }>
-    : _CreateFetch<OP>
-  : _CreateFetch<OP>
+export type CreateFetch<M, OP> = _CreateFetch<OP>
 
 export type Middleware = (
   url: string,
@@ -137,10 +130,15 @@ export type Request = {
   baseUrl: string
   method: Method
   path: string
-  queryParams: string[] // even if a post these will be sent in query
-  payload: any
+  params: RequestParams
   init?: RequestInit
   fetch: Fetch
+}
+
+export type RequestParams = {
+  body?: any
+  path?: Record<string, string>
+  query?: Record<string, string>
 }
 
 export type ApiResponse<R = any> = {

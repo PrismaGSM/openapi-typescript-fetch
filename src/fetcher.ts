@@ -7,12 +7,12 @@ import {
   FetchConfig,
   Method,
   Middleware,
-  OpArgType,
   OpenapiPaths,
   OpErrorType,
   Request,
   _TypedFetch,
   TypedFetch,
+  RequestParams,
 } from './types'
 
 const sendBody = (method: Method) =>
@@ -54,22 +54,21 @@ function getPath(path: string, payload: Record<string, any>) {
 }
 
 function getQuery(
-  method: Method,
-  payload: Record<string, any>,
-  query: string[],
+  // method: Method,
+  query: Record<string, any>,
 ) {
-  let queryObj = {} as any
+  // let queryObj = {} as any
 
-  if (sendBody(method)) {
-    query.forEach((key) => {
-      queryObj[key] = payload[key]
-      delete payload[key]
-    })
-  } else {
-    queryObj = { ...payload }
-  }
+  // if (sendBody(method)) {
+  //   query.forEach((key) => {
+  //     queryObj[key] = payload[key]
+  //     delete payload[key]
+  //   })
+  // } else {
+  //   queryObj = { ...payload }
+  // }
 
-  return queryString(queryObj)
+  return queryString(query)
 }
 
 function getHeaders(body?: string, init?: HeadersInit) {
@@ -87,7 +86,10 @@ function getHeaders(body?: string, init?: HeadersInit) {
 }
 
 function getBody(method: Method, payload: any) {
-  const body = sendBody(method) ? JSON.stringify(payload) : undefined
+  const body = sendBody(method) && payload != null 
+    ? JSON.stringify(payload) 
+    : undefined
+
   // if delete don't send body if empty
   return method === 'delete' && body === '{}' ? undefined : body
 }
@@ -113,14 +115,15 @@ function getFetchParams(request: Request) {
   // if body is a top level array [ 'a', 'b', param: value ] with param values
   // using spread [ ...payload ] returns [ 'a', 'b' ] and skips custom keys
   // cloning with Object.assign() preserves all keys
-  const payload = Object.assign(
-    Array.isArray(request.payload) ? [] : {},
-    request.payload,
-  )
+  
+  // const payload = Object.assign(
+  //   Array.isArray(request.payload) ? [] : {},
+  //   request.payload,
+  // )
 
-  const path = getPath(request.path, payload)
-  const query = getQuery(request.method, payload, request.queryParams)
-  const body = getBody(request.method, payload)
+  const path = getPath(request.path, request.params.path || {})
+  const query = getQuery(request.params.query || {})
+  const body = getBody(request.method, request.params.body)
   const headers = getHeaders(body, request.init?.headers)
   const url = request.baseUrl + path + query
 
@@ -139,12 +142,12 @@ async function getResponseData(response: Response) {
   if (response.status === 204 /* no content */) {
     return undefined
   }
-  if (contentType && contentType.indexOf('application/json') !== -1) {
-    return await response.json()
-  }
   const text = await response.text()
   try {
-    return JSON.parse(text)
+    if (contentType && contentType.indexOf('application/json') !== -1) {
+      return JSON.parse(text)
+    }
+    return text
   } catch (e) {
     return text
   }
@@ -200,9 +203,9 @@ async function fetchUrl<R>(request: Request) {
 }
 
 function createFetch<OP>(fetch: _TypedFetch<OP>): TypedFetch<OP> {
-  const fun = async (payload: OpArgType<OP>, init?: RequestInit) => {
+  const fun = async (init?: RequestInit) => {
     try {
-      return await fetch(payload, init)
+      return await fetch(init)
     } catch (err) {
       if (err instanceof ApiError) {
         throw new fun.Error(err)
@@ -233,33 +236,74 @@ function fetcher<Paths>() {
   const middlewares: Middleware[] = []
   const fetch = wrapMiddlewares(middlewares, fetchJson)
 
-  return {
-    configure: (config: FetchConfig) => {
+  const configure = (config: FetchConfig) => {
       baseUrl = config.baseUrl || ''
       defaultInit = config.init || {}
       middlewares.splice(0)
       middlewares.push(...(config.use || []))
+    }
+
+  const use = (mw: Middleware) => middlewares.push(mw)
+  const path = <P extends keyof Paths>(path: P) => {
+    const params: RequestParams = {}
+
+    const builder = <M extends keyof Paths[P]>(method: M) => ({
+    query: (queryParams?: QueryParam<Paths[P][M]>) => {
+      params.query = queryParams as Record<string, string>
+      return builder(method)
     },
-    use: (mw: Middleware) => middlewares.push(mw),
-    path: <P extends keyof Paths>(path: P) => ({
-      method: <M extends keyof Paths[P]>(method: M) => ({
-        create: ((queryParams?: Record<string, true | 1>) =>
-          createFetch((payload, init) =>
-            fetchUrl({
-              baseUrl: baseUrl || '',
-              path: path as string,
-              method: method as Method,
-              queryParams: Object.keys(queryParams || {}),
-              payload,
-              init: mergeRequestInit(defaultInit, init),
-              fetch,
-            }),
-          )) as CreateFetch<M, Paths[P][M]>,
-      }),
-    }),
+    body: (bodyParams?: BodyParam<Paths[P][M]>) => {
+      params.body = bodyParams
+      return builder(method)
+    },
+    path: (pathParams?: PathParam<Paths[P][M]>) => {
+      params.path = pathParams as Record<string, string>
+      return builder(method)
+    },
+    create: (() => createFetch((init) =>
+        fetchUrl({
+          baseUrl: baseUrl || '',
+          path: path as string,
+          method: method as Method,
+          // queryParams: Object.keys(queryParams || {}),
+          // payload,
+          params,
+          init: mergeRequestInit(defaultInit, init),
+          fetch,
+        })
+      )) as CreateFetch<M, Paths[P][M]>
+    })
+    return { method: builder }
+  }
+
+  return {
+    configure,
+    use,
+    path,
   }
 }
+
+type QueryParam<Path> = PickParameters<'query', Path>
+type BodyParam<Path> = UnionToIntersection<Values<PickParameters<'body', Path>>>
+type PathParam<Path> = PickParameters<'path', Path>
+
+type PickParameters<Param, Path> = Param extends 'body' | 'query' | 'path' ?
+  Path extends {
+    parameters: {
+      query?: infer Q,
+      path?: infer P,
+      body?: infer B,
+    }
+  } ? Path['parameters'][Param] : unknown : unknown
 
 export const Fetcher = {
   for: <Paths extends OpenapiPaths<Paths>>() => fetcher<Paths>(),
 }
+
+type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
+  k: infer I
+) => void
+  ? I
+  : never
+
+type Values<T> = T[keyof T]
