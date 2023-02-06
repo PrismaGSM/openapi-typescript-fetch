@@ -15,9 +15,10 @@
     "import": "./dist/esm/index.js",
     "require": "./dist/cjs/index.js"
   },
-  "types": "./dist/esm/index.d.ts",
+  "types": "./index.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "repository": {
     "type": "git",
