@@ -1,7 +1,7 @@
 {
   "name": "@prismagsm/openapi-typescript-fetch",
   "description": "A typed fetch client for openapi-typescript",
-  "version": "2.1.4",
+  "version": "2.1.6",
   "engines": {
     "node": ">= 12.0.0",
     "npm": ">= 7.0.0"
@@ -15,7 +15,7 @@
     "import": "./dist/esm/index.js",
     "require": "./dist/cjs/index.js"
   },
-  "types": "./index.ts",
+  "types": "./dist/esm/index.d.ts",
   "files": [
     "dist",
     "src"
