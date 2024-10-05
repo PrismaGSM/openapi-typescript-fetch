@@ -4,6 +4,7 @@ import { arrayRequestBody } from './utils'
 import type {
   ApiResponse,
   FetchArgType,
+  FetchConfig,
   FetchReturnType,
   FetchErrorType,
   Middleware,
@@ -22,6 +23,7 @@ export type {
   OpDefaultReturnType,
   OpReturnType,
   FetchArgType,
+  FetchConfig,
   FetchReturnType,
   FetchErrorType,
   ApiResponse,
